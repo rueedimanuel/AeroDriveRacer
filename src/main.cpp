@@ -1,13 +1,17 @@
-#include "Arduino.h"
-#include "DistanceSensor.h"
+#include "Common.h"
 
-// Define the trigger pin
-#define TRIGGER_PIN 13
+#define TRIGGER_PIN 13   // Define the trigger pin
+#define MAX_DISTANCE 200 // Maximum distance (in cm) to ping.
 
 // Create instances of DistanceSensor
-DistanceSensor DistanceSensorL(10, TRIGGER_PIN); // Left sensor
-DistanceSensor DistanceSensorR(11, TRIGGER_PIN); // Right sensor
-DistanceSensor DistanceSensorC(12, TRIGGER_PIN); // Center sensor
+NewPing PingDistanceSensorL(TRIGGER_PIN, 10, MAX_DISTANCE); // Each sensor's trigger pin, echo pin, and max distance to ping.
+NewPing PingDistanceSensorR(TRIGGER_PIN, 11, MAX_DISTANCE);
+NewPing PingDistanceSensorC(TRIGGER_PIN, 12, MAX_DISTANCE);
+unsigned long DistanceSensorL = 0;
+unsigned long DistanceSensorR = 0;
+unsigned long DistanceSensorC = 0;
+SpeedOrientation AutoNavControl{0, 0}; // speed and Orientation form auto navigation
+Navigation AutoNav(0, 0);
 
 void setup()
 {
@@ -16,17 +20,39 @@ void setup()
 
 void loop()
 {
-  DistanceSensorL.updateDistance();
-  DistanceSensorR.updateDistance();
-  DistanceSensorC.updateDistance();
+
+  DistanceSensorL = PingDistanceSensorL.ping_cm();
+  if (DistanceSensorL == 0)
+  {
+    DistanceSensorL = MAX_DISTANCE;
+  };
+  delay(10);
+  DistanceSensorR = PingDistanceSensorR.ping_cm();
+  if (DistanceSensorR == 0)
+  {
+    DistanceSensorR = MAX_DISTANCE;
+  };
+  delay(10);
+  DistanceSensorC = PingDistanceSensorC.ping_cm();
+  if (DistanceSensorC == 0)
+  {
+    DistanceSensorC = MAX_DISTANCE;
+  };
 
   Serial.print("Left Sensor: ");
-  Serial.print(DistanceSensorL.getDistance());
+  Serial.print(DistanceSensorL);
   Serial.print(" cm, Right Sensor: ");
-  Serial.print(DistanceSensorR.getDistance());
+  Serial.print(DistanceSensorR);
   Serial.print(" cm, Center Sensor: ");
-  Serial.print(DistanceSensorC.getDistance());
+  Serial.print(DistanceSensorC);
   Serial.println(" cm");
 
-  delay(10); // Minimal delay to avoid serial buffer overflow
+  AutoNavControl = AutoNav.getSpeedAndOrientation(DistanceSensorL, DistanceSensorR, DistanceSensorC);
+
+  Serial.print("speed: ");
+  Serial.print(AutoNavControl.speed);
+  Serial.print("orientation: ");
+  Serial.println(AutoNavControl.orientation);
+
+  delay(1000);
 }
