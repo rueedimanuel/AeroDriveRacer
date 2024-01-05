@@ -57,5 +57,9 @@
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "cmake.configureOnOpen": true,
-  "C_Cpp.errorSquiggles": "enabled"
+  "C_Cpp.errorSquiggles": "enabled",
+  "files.associations": {
+    "fstab": "ini",
+    "new": "cpp"
+  }
 }

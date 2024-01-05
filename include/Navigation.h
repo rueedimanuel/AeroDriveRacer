@@ -15,5 +15,7 @@ private:
 public:
     Navigation() = delete;
     Navigation(float Speed, float Orientation);
-    SpeedOrientation getSpeedAndOrientation(float distanceLeft, float distanceRight, float distanceCenter);
+    SpeedOrientation CalculateSpeedAndOrientation(float distanceLeft, float distanceRight, float distanceCenter);
+    float GetOrientation();
+    float GetSpeed();
 };
