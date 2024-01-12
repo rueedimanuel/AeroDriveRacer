@@ -16,30 +16,38 @@ unsigned long DistanceSensorC = 0;
 Servo PropellerMotor;     // create servo object to control the Propeller Motor
 Servo SteeringServo;      // create servo object to control the Steering Servo
 Navigation AutoNav(0, 0); // instance of automatic Navigationcontrol
-enum class SteeringMode
-{
-  off,
-  manual,
-  assisted
-};
-SteeringMode Mode;
+bool assistedSteering;
+
+SoftwareSerial SerialELRS(12,13);
 
 void UpdateAllDistaceSensors();
 void DEBUG();
 
 void setup()
 {
+  // Open serial communications and wait for port to open:
+  Serial.begin(9600);
+   while (!Serial) {
+    ; // wait for serial port to connect. Needed for Leonardo only
+  }
+  SerialELRS.begin(11000);
   Serial.begin(9600);
   PropellerMotor.attach(PROPELLERMOTOR_PIN);
   SteeringServo.attach(STERINGSERVO_PIN);
-  Mode = SteeringMode::off;
+  assistedSteering = false;
   pinMode(MODESELECT_PIN, INPUT); // Steering modepin
 }
 
 void loop()
 {
-  // Set mode based on modeselect pin
-  Mode = (digitalRead(MODESELECT_PIN) == HIGH) ? SteeringMode::manual : SteeringMode::off;
+  SerialELRS.listen();
+  Serial.println("Data from port one:");
+  // while there is data coming in, read it
+  // and send to the hardware serial port:
+  while (SerialELRS.available() > 0) {
+    char inByte = SerialELRS.read();
+    Serial.write(inByte);
+  }
 
   // get all distances
   UpdateAllDistaceSensors();
@@ -51,23 +59,11 @@ void loop()
   DEBUG();
 
 // control Motors
-  switch (Mode)
-  {
-  case SteeringMode::off:
-    PropellerMotor.write(10);
-    break;
-
-  case SteeringMode::manual:
-    PropellerMotor.write(30);
-    break;
-
-  case SteeringMode::assisted:
+  if(assistedSteering){
     PropellerMotor.write(AutoNav.GetSpeed());
     SteeringServo.write(AutoNav.GetOrientation());
-    break;
-
-  default:
-    break;
+  }else{
+    PropellerMotor.write(30);
   }
 
   delay(500);
@@ -88,20 +84,12 @@ void DEBUG()
   Serial.print(" / Orientation: ");
   Serial.println(AutoNav.GetOrientation()); // right is +, left is -
   Serial.print("Mode: ");
-  switch (Mode)
-  {
-  case SteeringMode::off:
-    Serial.println("Off");
-    break;
-  case SteeringMode::assisted:
+  if(assistedSteering){
     Serial.println("assisted");
-    break;
-  case SteeringMode::manual:
+  }else{
     Serial.println("manual");
-    break;
-  default:
-    Serial.println("Unknown steering mode.");
   }
+  
   Serial.println("----");
 };
 
