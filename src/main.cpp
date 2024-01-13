@@ -1,10 +1,13 @@
 #include "Common.h"
 
-#define TRIGGER_PIN 7    // Define the trigger pin
-#define MAX_DISTANCE 200 // Maximum distance (in cm) to ping.
+//#define DEBUG 
+
+#define TRIGGER_PIN 7             // Define the trigger pin for DistanceSensors
+#define MAX_DISTANCE 250          // Maximum distance (in cm) to ping.
 #define PROPELLERMOTOR_PIN 3
 #define STERINGSERVO_PIN 5
-#define MODESELECT_PIN 2
+#define STEERINGSERVO_MAX_R 48    // max range of SteeringServo to the right and left
+#define STEERINGSERVO_MAX_L 127   
 
 // Create instances of DistanceSensor
 NewPing PingDistanceSensorL(TRIGGER_PIN, 8, MAX_DISTANCE); // Each sensor's trigger pin, echo pin, and max distance to ping.
@@ -13,41 +16,42 @@ NewPing PingDistanceSensorC(TRIGGER_PIN, 10, MAX_DISTANCE);
 unsigned long DistanceSensorL = 0;
 unsigned long DistanceSensorR = 0;
 unsigned long DistanceSensorC = 0;
-Servo PropellerMotor;     // create servo object to control the Propeller Motor
-Servo SteeringServo;      // create servo object to control the Steering Servo
-Navigation AutoNav(0, 0); // instance of automatic Navigationcontrol
-bool assistedSteering;
-
-SoftwareSerial SerialELRS(12,13);
+Servo PropellerMotor;           // create servo object to control the Propeller Motor
+Servo SteeringServo;            // create servo object to control the Steering Servo
+Navigation AutoNav;       // instance of automatic Navigationcontrol
+bool assistedSteering;          // if active use AutoNAv to help steering
+bfs::SbusRx sbus_rx(&Serial);   // SBUS object, reading SBUS 
+bfs::SbusData ReciverData;      // SBUS ReciverData
 
 void UpdateAllDistaceSensors();
-void DEBUG();
+void MotroControl();
+void log();
+
 
 void setup()
 {
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-   while (!Serial) {
-    ; // wait for serial port to connect. Needed for Leonardo only
-  }
-  SerialELRS.begin(11000);
-  Serial.begin(9600);
   PropellerMotor.attach(PROPELLERMOTOR_PIN);
   SteeringServo.attach(STERINGSERVO_PIN);
   assistedSteering = false;
-  pinMode(MODESELECT_PIN, INPUT); // Steering modepin
+
+  // Initialize Serial Communication
+  Serial.begin(100000);
+  sbus_rx.Begin();
+
+  // Initialize LED Pin
+  pinMode(LED_BUILTIN, OUTPUT);
 }
 
-void loop()
-{
-  SerialELRS.listen();
-  Serial.println("Data from port one:");
-  // while there is data coming in, read it
-  // and send to the hardware serial port:
-  while (SerialELRS.available() > 0) {
-    char inByte = SerialELRS.read();
-    Serial.write(inByte);
+
+void loop(){
+
+  // Get Sbus data
+  if (sbus_rx.Read()) {
+    ReciverData = sbus_rx.data();
   }
+
+  assistedSteering = (ReciverData.ch[4] < 1024) ? false : true ;  // update assistedSteering based on signal from reciver
+  digitalWrite(LED_BUILTIN, assistedSteering ? HIGH : LOW);       // set LED to on if assistedSteering is on
 
   // get all distances
   UpdateAllDistaceSensors();
@@ -55,21 +59,19 @@ void loop()
   // calculate speed and orientation form distances
   AutoNav.CalculateSpeedAndOrientation(DistanceSensorL, DistanceSensorR, DistanceSensorC);
 
-  // log
-  DEBUG();
+  #ifdef DEBUG
+      log();
+  #else
+    // control Motors
+    MotroControl();
+  #endif
 
-// control Motors
-  if(assistedSteering){
-    PropellerMotor.write(AutoNav.GetSpeed());
-    SteeringServo.write(AutoNav.GetOrientation());
-  }else{
-    PropellerMotor.write(30);
-  }
 
-  delay(500);
 }
 
-void DEBUG()
+
+
+void log()
 {
   Serial.print("Left Sensor: ");
   Serial.print(DistanceSensorL);
@@ -91,7 +93,35 @@ void DEBUG()
   }
   
   Serial.println("----");
-};
+
+  delay(500);
+}
+
+void MotroControl(){
+  if(assistedSteering){
+    // control Steering
+    if(ReciverData.ch[0] < 900 || 1100 < ReciverData.ch[0]){
+      int SteeringOrientation = map(ReciverData.ch[0],172,1811,STEERINGSERVO_MAX_L,STEERINGSERVO_MAX_R); 
+      SteeringServo.write(SteeringOrientation);
+    }else{
+    SteeringServo.write(map(AutoNav.GetOrientation(),-100,100,STEERINGSERVO_MAX_L,STEERINGSERVO_MAX_R));
+    }
+
+    // control PropellerSpeed
+    float ManualPropellerSpeed = map(ReciverData.ch[2],172,1811,0,1000);
+    ManualPropellerSpeed = ManualPropellerSpeed/1000; // to float
+    float AutoNavPropellerSpeed = map(AutoNav.GetSpeed(),0,100,30,150);
+    PropellerMotor.write(max(ManualPropellerSpeed * AutoNavPropellerSpeed,30));
+
+  }else{
+    // control Steering manually
+    int SteeringOrientation = map(ReciverData.ch[0],172,1811,STEERINGSERVO_MAX_L,STEERINGSERVO_MAX_R); 
+    SteeringServo.write(SteeringOrientation);
+    // control PropellerSpeed
+    int PropellerSpeed = map(ReciverData.ch[2],172,1811,30,150);
+    PropellerMotor.write(PropellerSpeed);
+  };
+}
 
 void UpdateAllDistaceSensors()
 {
@@ -112,4 +142,4 @@ void UpdateAllDistaceSensors()
   {
     DistanceSensorC = MAX_DISTANCE;
   };
-};
+}
